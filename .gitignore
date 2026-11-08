@@ -1,0 +1,26 @@
+.gradle/
+.kotlin/
+**/build/
+local.properties
+*.jks
+*.keystore
+.idea/
+/work/
+/outputs/
+
+# Local credentials, device databases, and distributable build artifacts
+.env
+.env.*
+!.env.example
+*.pem
+*.p12
+*.pfx
+*.key
+*.apk
+*.aab
+*.apks
+*.db
+*.db-shm
+*.db-wal
+*.log
+.DS_Store

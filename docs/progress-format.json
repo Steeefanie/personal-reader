@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "progress": [
+    {
+      "bookHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "format": "epub",
+      "locator": {
+        "href": "chapter-1.xhtml",
+        "type": "application/xhtml+xml",
+        "title": "第一章",
+        "locations": { "progression": 0.4, "position": 3, "totalProgression": 0.12 }
+      },
+      "updatedAt": 1793700000000,
+      "pdfOffset": 0,
+      "pdfZoom": 1
+    }
+  ],
+  "bookmarks": [
+    {
+      "bookHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "id": "fd46f715-382c-418a-b158-58c3b7f8a377",
+      "format": "epub",
+      "label": "第一章",
+      "locator": { "href": "chapter-1.xhtml", "type": "application/xhtml+xml", "locations": { "progression": 0.4 } },
+      "updatedAt": 1793700000000,
+      "deleted": false
+    }
+  ]
+}

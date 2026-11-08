@@ -1,0 +1,7 @@
+<resources>
+    <style name="Theme.LeafReader" parent="Theme.LeafReader.Base">
+        <item name="android:navigationBarColor">#FFFFFF</item>
+        <item name="android:windowLightNavigationBar">true</item>
+        <item name="android:forceDarkAllowed">false</item>
+    </style>
+</resources>
