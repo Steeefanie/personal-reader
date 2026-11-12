@@ -1,4 +1,4 @@
-param([switch]$Release, [switch]$Offline, [switch]$WithAndroidTests)
+﻿param([switch]$Release, [switch]$Offline, [switch]$WithAndroidTests)
 $ErrorActionPreference = 'Stop'
 $projectRoot = Split-Path $PSScriptRoot -Parent
 $workRoot = Join-Path $projectRoot 'work'
@@ -16,7 +16,6 @@ if (Test-Path ($keytool + '.exe')) { $keytool += '.exe' }
 New-Item -ItemType Directory -Force (Join-Path $projectRoot 'build') | Out-Null
 $debugKey = Join-Path $projectRoot 'build/debug.keystore'
 $existingKey = Join-Path $workRoot 'signing/personal-reader.keystore'
-if (-not (Test-Path $existingKey)) { $existingKey = Join-Path $workRoot 'signing/leaf-reader-test.keystore' }
 if (-not (Test-Path $debugKey) -and (Test-Path $existingKey)) { Copy-Item -LiteralPath $existingKey -Destination $debugKey }
 if (-not (Test-Path $debugKey)) {
     & $keytool -genkeypair -keystore $debugKey -storepass android -keypass android -alias androiddebugkey -dname 'CN=Android Debug,O=Android,C=US' -keyalg RSA -keysize 2048 -validity 10000

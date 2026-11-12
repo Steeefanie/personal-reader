@@ -92,7 +92,7 @@ class DriveClientTest {
         val client = DriveClient("https://drive.example", transport = Script { _, _, _, _ ->
             response(200, """{"binding_id":"b1","device_code":"private-code","verification_uri_complete":"https://evil.example/device?code=public","confirmation_code":"123456","expires_in":300,"interval":5}""")
         })
-        try { client.createBinding("0.2.0"); fail() } catch (_: IllegalArgumentException) { }
+        try { client.createBinding("1.0.0"); fail() } catch (_: IllegalArgumentException) { }
     }
     @Test fun missingPaginationCursorIsRejected() = runBlocking {
         val client = DriveClient("https://drive.example", "token", Script { _, _, _, _ -> response(200, """{"items":[]}""") })

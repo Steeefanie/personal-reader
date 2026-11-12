@@ -4,21 +4,12 @@ import org.json.JSONObject
 import org.json.JSONArray
 import top.steeefanie.leafreader.storage.*
 
-/** Single-book wire documents retain the existing v1 exchange format. */
+/** Single-book wire documents use the v1 exchange format. */
 object BookState {
     val empty = Exchange(emptyList(), emptyList())
     fun decode(hash: String, json: String): Exchange = normalized(ProgressExchange.decode(json)).also {
         require(hash.matches(Regex("[a-f0-9]{64}"))) { "无效的内容哈希" }
         require(it.progress.size <= 1 && (it.progress.map { p -> p.hash } + it.bookmarks.map { b -> b.hash }).all { h -> h == hash }) { "单书进度与路径不匹配" }
-    }
-    /** Only persisted legacy rows may contain excess indentation; wire and import limits stay strict. */
-    fun decodeStored(hash: String, json: String): Exchange {
-        require(json.length <= ProgressExchange.MAX_BYTES * 4) { "本地进度记录过大" }
-        val bytes = json.toByteArray(Charsets.UTF_8).size
-        require(bytes <= ProgressExchange.MAX_BYTES * 4) { "本地进度记录过大" }
-        val compact = if (bytes > ProgressExchange.MAX_BYTES)
-            JSONObject(json).toString() else json
-        return decode(hash, compact)
     }
     fun encode(data: Exchange) = ProgressExchange.encode(data, pretty = false)
     private fun sorted(value: Any?): Any? = when (value) {

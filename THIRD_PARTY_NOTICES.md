@@ -16,9 +16,9 @@
 
 二维码编码器仅纳入 `BitBuffer.java`、`DataTooLongException.java`、`QrCode.java`、`QrSegment.java`，每个文件保留完整 MIT 版权与许可头，不增加 Maven 依赖。未修改上游源码。
 
-## 本机字体（v0.5.2）
+## 本机字体
 
-应用不再分发思源黑体、思源宋体字体文件。EPUB 排版可以跟随系统，或选择应用可读取的本机字体；字体只读加载，未覆盖字符由系统字体回退。读取系统字体不代表取得其再次分发许可，应用不导出这些字库。
+应用不内置中文字库文件。EPUB 排版可以跟随系统，或选择应用可读取的本机字体；字体只读加载，未覆盖字符由系统字体回退。读取系统字体不代表取得其再次分发许可，应用不导出这些字库。
 
 Readium、PDFBox 依赖自带的辅助字体资源随原库保留，包括 OpenDyslexic、AccessibleDfA、iA Writer Duospace 和 Liberation Sans；它们不作为本机中文字体选项。相应版权及许可遵循上游分发内容。
 

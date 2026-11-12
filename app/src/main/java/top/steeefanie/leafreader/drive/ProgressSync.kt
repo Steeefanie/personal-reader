@@ -32,12 +32,12 @@ class ProgressSync(private val db: ReaderDatabase, private val clock: () -> Long
                 guard()
                 val snapshot = db.drive().state(owner, hash)
                 if ((snapshot?.retryAt ?: 0) > clock()) return@withBookLock
-                val local = snapshot?.let { BookState.decodeStored(hash, it.currentJson) } ?: BookState.empty
+                val local = snapshot?.let { BookState.decode(hash, it.currentJson) } ?: BookState.empty
                 try {
                     val remote = client.readState(hash)
                     val knownFormat = db.dao().book(hash)?.format ?: local.progress.firstOrNull()?.format ?: local.bookmarks.firstOrNull()?.format
                     require(knownFormat == null || remote == null || (remote.state.progress.map { it.format } + remote.state.bookmarks.map { it.format }).all { it == knownFormat }) { "远端进度格式与书籍不一致" }
-                    val baseline = if (remote == null) BookState.empty else snapshot?.baseJson?.let { BookState.decodeStored(hash, it) } ?: BookState.empty
+                    val baseline = if (remote == null) BookState.empty else snapshot?.baseJson?.let { BookState.decode(hash, it) } ?: BookState.empty
                     val result = StateMerge.merge(baseline, local, remote?.state ?: BookState.empty)
                     val accepted = when {
                         remote != null && BookState.equivalent(result.state, remote.state) -> remote
@@ -51,7 +51,7 @@ class ProgressSync(private val db: ReaderDatabase, private val clock: () -> Long
                         val latest = db.drive().state(owner, hash)
                         val acceptedState = accepted?.state ?: BookState.empty
                         val finalMerge = if (latest == null || latest.revision == (snapshot?.revision ?: 0L)) MergeResult(acceptedState)
-                            else StateMerge.merge(local, BookState.decodeStored(hash, latest.currentJson), acceptedState)
+                            else StateMerge.merge(local, BookState.decode(hash, latest.currentJson), acceptedState)
                         listOfNotNull(result.localConflict, finalMerge.localConflict).forEach {
                             db.drive().putConflict(CloudConflict(UUID.randomUUID().toString(), owner, hash, BookState.canonical(it), clock()))
                         }

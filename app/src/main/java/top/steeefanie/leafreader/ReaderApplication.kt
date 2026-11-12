@@ -16,7 +16,7 @@ import top.steeefanie.leafreader.library.*
 
 class ReaderApplication : Application() {
     val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-    val database by lazy { Room.databaseBuilder(this, ReaderDatabase::class.java, "reader.db").addMigrations(DRIVE_MIGRATION_1_2, PRESENTATION_MIGRATION_2_3, BOOK_DELETION_MIGRATION_3_4, LOCAL_ONLY_MIGRATION_4_5).build() }
+    val database by lazy { Room.databaseBuilder(this, ReaderDatabase::class.java, "reader.db").build() }
     val repository by lazy { Repository(this, database) }
     val presentation by lazy { BookPresentation(this) }
     val settings by lazy { Settings(this) }

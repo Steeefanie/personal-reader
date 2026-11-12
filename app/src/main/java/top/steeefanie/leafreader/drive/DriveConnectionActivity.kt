@@ -102,7 +102,7 @@ class DriveConnectionActivity:PaperActivity() {
         if (operation?.isActive == true || polling?.isActive == true) { message("请先完成或取消当前操作"); return }
         task {
             val client = DriveClient(address.text.toString())
-            val binding = client.createBinding(packageManager.getPackageInfo(packageName, 0).versionName ?: "0.4.0")
+            val binding = client.createBinding(packageManager.getPackageInfo(packageName, 0).versionName ?: "1.0.0")
             val bitmap = withContext(Dispatchers.Default) {
                 val qr = QrCode.encodeText(binding.verificationUrl, QrCode.Ecc.MEDIUM)
                 val scale = maxOf(2, 480 / (qr.size + 8)); val side = (qr.size + 8) * scale

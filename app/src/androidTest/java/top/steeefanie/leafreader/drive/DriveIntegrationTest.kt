@@ -180,23 +180,6 @@ class DriveIntegrationTest {
             }finally{books.forEach{repository.file(it).delete();repository.jsonFile(it.hash).delete()}}
         }
     }
-    @Test fun legacyCredentialAliasRemainsReadableAfterProjectRename() {
-        val context=IsolatedContext(base);val alias="private-reader-device-key-v1"
-        val store=java.security.KeyStore.getInstance("AndroidKeyStore").apply{load(null)}
-        val existed=store.containsAlias(alias)
-        val key=(store.getKey(alias,null) as? javax.crypto.SecretKey) ?: javax.crypto.KeyGenerator.getInstance("AES","AndroidKeyStore").apply {
-            init(android.security.keystore.KeyGenParameterSpec.Builder(alias,android.security.keystore.KeyProperties.PURPOSE_ENCRYPT or android.security.keystore.KeyProperties.PURPOSE_DECRYPT)
-                .setBlockModes("GCM").setEncryptionPaddings("NoPadding").build())
-        }.generateKey()
-        val id="legacy-fixture";val credentials=SecureCredentials(context)
-        try {
-            val cipher=javax.crypto.Cipher.getInstance("AES/GCM/NoPadding").apply{init(javax.crypto.Cipher.ENCRYPT_MODE,key);updateAAD(id.toByteArray())}
-            val bytes=cipher.doFinal("self-authored-legacy-token".toByteArray())
-            val encoded=android.util.Base64.encodeToString(cipher.iv,android.util.Base64.NO_WRAP)+":"+android.util.Base64.encodeToString(bytes,android.util.Base64.NO_WRAP)
-            context.getSharedPreferences("drive-credentials",Context.MODE_PRIVATE).edit().putString(id,encoded).commit()
-            assertEquals("self-authored-legacy-token",credentials.read(id))
-        }finally{credentials.clear(id);if(!existed)store.deleteEntry(alias)}
-    }
     @Test fun deletionNeedsCapabilityAndSeparatePermissionAndNeverRemovesLocalOnFailure()=runBlocking {
         service {service,repository,db,mock ->
             val c=service.bind("https://unit.example",BindingPoll("approved",token="token-u1",identity=mock.identity("u1")))
@@ -394,22 +377,6 @@ class DriveIntegrationTest {
             assertEquals(compact,db.drive().conflicts(c.ownerKey).single().json)
         }finally{db.close()}
     }
-    @Test fun legacyWhitespaceExpandedCloudStateCanBeReadAndCompactedWithoutLosingPositions() = runBlocking {
-        val db=database();val repository=Repository(base,db);val c=connection()
-        try{
-            val data=Exchange(listOf(position(7,100)),listOf(Bookmark(hash,"keep","epub","原有书签",position(7,100).locator,100)))
-            val old=" ".repeat(ProgressExchange.MAX_BYTES)+BookState.canonical(data)
-            db.drive().putState(CloudState(c.ownerKey,hash,old,old,"\"v1\"",1,false))
-            assertEquals(7,JSONObject(repository.progress(hash,c.ownerKey)!!.locator).getJSONObject("locations").getInt("position"))
-            assertEquals("原有书签",repository.snapshot(c.ownerKey).bookmarks.single().label)
-            val mock=MockDrive();mock.states["u1:$hash"]=MockDrive.State(data,1)
-            ProgressSync(db).sync(c,DriveClient(c.baseUrl,"token-u1",mock),hash){}
-            val saved=db.drive().state(c.ownerKey,hash)!!
-            assertTrue(saved.currentJson.toByteArray().size<ProgressExchange.MAX_BYTES)
-            assertEquals(saved.currentJson,saved.baseJson);assertFalse(saved.dirty)
-            assertTrue(mock.calls.none{it.method=="PUT"})
-        }finally{db.close()}
-    }
     @Test fun bookmarkConflictIsPersistedAndReadableAfterSync() = runBlocking {
         val db=database();val repository=Repository(base,db);val c=connection()
         try{
@@ -421,7 +388,7 @@ class DriveIntegrationTest {
             ProgressSync(db).sync(c,DriveClient(c.baseUrl,"token-u1",mock),hash){}
             assertEquals("远端",repository.bookmarks(hash,c.ownerKey).single().label)
             val copy=db.drive().conflicts(c.ownerKey).single()
-            assertEquals("本机",BookState.decodeStored(hash,copy.json).bookmarks.single().label)
+            assertEquals("本机",BookState.decode(hash,copy.json).bookmarks.single().label)
         }finally{db.close()}
     }
     @Test fun uploadWhileReadingRetainsNewerLocalRevision() = runBlocking {

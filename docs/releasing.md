@@ -4,8 +4,8 @@
 
 ## 版本和签名
 
-1. 修改 `app/build.gradle.kts` 的 versionName，并递增 versionCode。当前 1.0.0 / 14。
-2. 维护者沿用原固定签名；本机保存在 Git 忽略的 `work/signing/personal-reader.keystore`。不要重新生成密钥来替换已有发布签名。
+1. 修改 `app/build.gradle.kts` 的 versionName 和 versionCode。当前为 1.0.0 / 1。
+2. 维护者使用固定发布签名；本机保存在 Git 忽略的 `work/signing/personal-reader.keystore`。不要重新生成密钥来替换发布签名。
 3. 通过环境变量向 Gradle 提供签名，不写入代码、项目属性或命令行明文口令：
 
 ```powershell

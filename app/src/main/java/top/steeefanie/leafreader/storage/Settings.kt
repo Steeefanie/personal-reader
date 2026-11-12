@@ -10,29 +10,27 @@ data class ReadingSettings(val fontSize: Double = 22.0, val lineHeight: Double =
 class Settings(context: Context) {
     private val store = context.readerSettings
     private val size = doublePreferencesKey("fontSizePoints")
-    private val legacySize = doublePreferencesKey("fontSize")
     private val line = doublePreferencesKey("lineHeight")
     private val margin = doublePreferencesKey("margins")
     private val family = stringPreferencesKey("fontFamily")
     private val weight = doublePreferencesKey("fontWeight")
     private val paragraph = doublePreferencesKey("paragraphSpacingV2")
-    private val legacyParagraph = doublePreferencesKey("paragraphSpacing")
     private val pageNumbers = booleanPreferencesKey("showPageNumbers")
     private val statusBar = booleanPreferencesKey("showStatusBar")
     private val touchTurn = booleanPreferencesKey("touchTurnPage")
     suspend fun read(): ReadingSettings = store.data.first().let {
         val savedFont = it[family]
         ReadingSettings(
-            TypographyOptions.nearest(TypographyOptions.sizes,it[size] ?: it[legacySize]?.let(TypographyOptions::legacySize) ?: 22.0,22.0),
+            TypographyOptions.nearest(TypographyOptions.sizes,it[size] ?: 22.0,22.0),
             TypographyOptions.nearest(TypographyOptions.lines,it[line] ?: 1.8,1.8),
             TypographyOptions.nearest(TypographyOptions.margins,it[margin] ?: 1.0,1.0),
             savedFont?.takeIf { it.length<=200 } ?: "system-default",
             it[pageNumbers] ?: true,it[statusBar] ?: true,
             (it[weight] ?: 1.0).takeIf { value -> value.isFinite() && value in .0025..2.5 } ?: 1.0,
-            TypographyOptions.nearest(TypographyOptions.paragraphs,it[paragraph] ?: it[legacyParagraph]?.let(TypographyOptions::legacyParagraphSpacing) ?: .5,.5),
+            TypographyOptions.nearest(TypographyOptions.paragraphs,it[paragraph] ?: .5,.5),
             it[touchTurn] ?: true)
     }
     suspend fun save(value: ReadingSettings) { store.edit {
-        it.remove(legacySize); it[size] = value.fontSize; it[line] = value.lineHeight; it[margin] = value.margins; it[family] = value.font; it[pageNumbers] = value.showPageNumbers; it[statusBar] = value.showStatusBar; it[weight] = value.fontWeight; it[paragraph] = value.paragraphSpacing; it[touchTurn] = value.touchTurnPage; it.remove(legacyParagraph)
+        it[size] = value.fontSize; it[line] = value.lineHeight; it[margin] = value.margins; it[family] = value.font; it[pageNumbers] = value.showPageNumbers; it[statusBar] = value.showStatusBar; it[weight] = value.fontWeight; it[paragraph] = value.paragraphSpacing; it[touchTurn] = value.touchTurnPage
     } }
 }

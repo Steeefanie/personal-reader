@@ -1,8 +1,6 @@
 package top.steeefanie.leafreader.drive
 
 import androidx.room.*
-import androidx.room.migration.Migration
-import androidx.sqlite.db.SupportSQLiteDatabase
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
@@ -125,28 +123,5 @@ abstract class DriveDao {
     @Transaction
     open suspend fun conflicts(owner: String): List<CloudConflict> = conflictPrefixes(owner).map { row ->
         row.copy(json = document(row.json) { conflictChunk(owner, row.id, it) })
-    }
-}
-
-val DRIVE_MIGRATION_1_2 = object : Migration(1, 2) {
-    override fun migrate(db: SupportSQLiteDatabase) {
-        db.execSQL("CREATE TABLE IF NOT EXISTS book_access (ownerKey TEXT NOT NULL, hash TEXT NOT NULL, lastRead INTEGER NOT NULL, PRIMARY KEY(ownerKey,hash))")
-        db.execSQL("INSERT INTO book_access(ownerKey,hash,lastRead) SELECT 'local',hash,lastRead FROM books")
-        db.execSQL("CREATE TABLE IF NOT EXISTS drive_connections (id TEXT NOT NULL PRIMARY KEY, baseUrl TEXT NOT NULL, userId TEXT NOT NULL, userName TEXT NOT NULL, role TEXT NOT NULL, deviceId TEXT NOT NULL, deviceName TEXT NOT NULL, rootId TEXT NOT NULL, status TEXT NOT NULL, lastSync INTEGER NOT NULL)")
-        db.execSQL("CREATE TABLE IF NOT EXISTS cloud_states (ownerKey TEXT NOT NULL, hash TEXT NOT NULL, currentJson TEXT NOT NULL, baseJson TEXT, etag TEXT, revision INTEGER NOT NULL, dirty INTEGER NOT NULL, lastSyncedAt INTEGER NOT NULL, error TEXT NOT NULL, retryAt INTEGER NOT NULL, PRIMARY KEY(ownerKey,hash))")
-        db.execSQL("CREATE TABLE IF NOT EXISTS cloud_conflicts (id TEXT NOT NULL PRIMARY KEY, ownerKey TEXT NOT NULL, hash TEXT NOT NULL, json TEXT NOT NULL, createdAt INTEGER NOT NULL)")
-        db.execSQL("CREATE TABLE IF NOT EXISTS remote_entries (ownerKey TEXT NOT NULL, id TEXT NOT NULL, parentId TEXT NOT NULL, kind TEXT NOT NULL, name TEXT NOT NULL, size INTEGER NOT NULL, format TEXT NOT NULL, hash TEXT NOT NULL, version TEXT NOT NULL, modifiedAt TEXT NOT NULL, deleted INTEGER NOT NULL, PRIMARY KEY(ownerKey,id))")
-    }
-}
-
-val BOOK_DELETION_MIGRATION_3_4 = object : Migration(3, 4) {
-    override fun migrate(db: SupportSQLiteDatabase) {
-        db.execSQL("CREATE TABLE IF NOT EXISTS deleted_cloud_books (ownerKey TEXT NOT NULL, hash TEXT NOT NULL, confirmedAt INTEGER NOT NULL, PRIMARY KEY(ownerKey,hash))")
-    }
-}
-
-val LOCAL_ONLY_MIGRATION_4_5 = object : Migration(4, 5) {
-    override fun migrate(db: SupportSQLiteDatabase) {
-        db.execSQL("CREATE TABLE IF NOT EXISTS local_only_books (ownerKey TEXT NOT NULL, hash TEXT NOT NULL, PRIMARY KEY(ownerKey,hash))")
     }
 }

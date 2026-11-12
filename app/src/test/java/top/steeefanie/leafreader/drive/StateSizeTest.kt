@@ -20,10 +20,6 @@ class StateSizeTest {
         assertEquals(23000, restored.bookmarks.size)
         assertEquals(compact, BookState.canonical(restored))
 
-        val legacy = JSONObject(compact).toString(2)
-        assertTrue(legacy.toByteArray().size > ProgressExchange.MAX_BYTES)
-        assertThrows(IllegalArgumentException::class.java) { BookState.decode(hash, legacy) }
-        assertEquals(23000, BookState.decodeStored(hash, legacy).bookmarks.size)
         val exported = ProgressExchange.encode(data)
         assertTrue(exported.toByteArray().size <= ProgressExchange.MAX_BYTES)
         assertEquals(23000, ProgressExchange.decode(exported).bookmarks.size)
@@ -31,10 +27,10 @@ class StateSizeTest {
         val oversized = data.copy(bookmarks = data.bookmarks.map { it.copy(label = "x".repeat(512)) })
         assertThrows(IllegalArgumentException::class.java) { BookState.canonical(oversized) }
     }
-    @Test fun legacyRecoveryStillValidatesHashAndRecords() {
-        val invalid = " ".repeat(ProgressExchange.MAX_BYTES) + """{"schemaVersion":999,"progress":[],"bookmarks":[]}"""
-        assertThrows(IllegalArgumentException::class.java) { BookState.decodeStored(hash, invalid) }
+    @Test fun decodeValidatesHashAndRecords() {
+        val invalid = """{"schemaVersion":999,"progress":[],"bookmarks":[]}"""
+        assertThrows(IllegalArgumentException::class.java) { BookState.decode(hash, invalid) }
         val wrongBook = Exchange(emptyList(), listOf(Bookmark("a".repeat(64), "one", "epub", "标签", locator, 10)))
-        assertThrows(IllegalArgumentException::class.java) { BookState.decodeStored(hash, BookState.canonical(wrongBook)) }
+        assertThrows(IllegalArgumentException::class.java) { BookState.decode(hash, BookState.canonical(wrongBook)) }
     }
 }

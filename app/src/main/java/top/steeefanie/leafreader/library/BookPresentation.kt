@@ -8,8 +8,6 @@ import android.util.LruCache
 import android.view.*
 import android.widget.*
 import androidx.room.*
-import androidx.room.migration.Migration
-import androidx.sqlite.db.SupportSQLiteDatabase
 import java.io.*
 import java.net.URI
 import java.util.zip.ZipFile
@@ -30,11 +28,6 @@ data class BookMetadata(@PrimaryKey val hash:String, val author:String="", val c
     @Query("SELECT * FROM book_metadata WHERE hash=:hash") suspend fun get(hash:String):BookMetadata?
     @Upsert suspend fun put(metadata:BookMetadata)
     @Query("DELETE FROM book_metadata WHERE hash=:hash") suspend fun forget(hash:String)
-}
-val PRESENTATION_MIGRATION_2_3=object:Migration(2,3) {
-    override fun migrate(db:SupportSQLiteDatabase) {
-        db.execSQL("CREATE TABLE IF NOT EXISTS book_metadata (hash TEXT NOT NULL PRIMARY KEY, author TEXT NOT NULL, coverName TEXT NOT NULL, coverState TEXT NOT NULL, pageCount INTEGER NOT NULL)")
-    }
 }
 /** NONE: local only (or no cloud connected); PENDING: will upload on the next cloud refresh; SYNCED: file is in the cloud. */
 enum class CloudMark { NONE, PENDING, SYNCED }
@@ -63,7 +56,7 @@ class BookPresentation(private val app:ReaderApplication) {
     @OptIn(ExperimentalCoroutinesApi::class)
     val library:Flow<LibrarySnapshot> = app.repository.owner.flatMapLatest { owner ->
         val progress:Flow<List<Progress>> = if(owner=="local") app.database.dao().observeProgress()
-            else app.database.drive().observeStates(owner).map { states -> withContext(Dispatchers.Default) { states.mapNotNull { row -> runCatching { top.steeefanie.leafreader.drive.BookState.decodeStored(row.hash, row.currentJson).progress.firstOrNull() }.getOrNull() } } }
+            else app.database.drive().observeStates(owner).map { states -> withContext(Dispatchers.Default) { states.mapNotNull { row -> runCatching { top.steeefanie.leafreader.drive.BookState.decode(row.hash, row.currentJson).progress.firstOrNull() }.getOrNull() } } }
         val cloud:Flow<List<String>> = if(owner=="local") flowOf(emptyList()) else app.database.drive().observeCloudHashes(owner)
         val localOnly:Flow<List<String>> = if(owner=="local") flowOf(emptyList()) else app.database.drive().observeLocalOnly(owner)
         combine(app.database.dao().observeOwnedBooks(owner),app.database.presentation().observe(),progress,cloud,localOnly) { books,metadata,positions,remote,kept ->

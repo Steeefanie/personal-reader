@@ -28,16 +28,14 @@ adb -s emulator-5554 install -r -t app/build/outputs/apk/androidTest/debug/app-d
 adb -s emulator-5554 shell am instrument -w top.steeefanie.leafreader.test/androidx.test.runner.AndroidJUnitRunner
 ```
 
-仪器测试会在目标模拟器内导入自建书籍、打开页面、修改测试设置并清理夹具。JVM 测试覆盖进度交换、接口校验、三方合并、续传、字体元数据和 EPUB 内容解析；Android 回归覆盖实际阅读、文字选择、恢复、界面、数据库升级及模拟云盘。需要用户书籍的可选测试默认跳过，书籍不会打包进仓库。
+仪器测试会在目标模拟器内导入自建书籍、打开页面、修改测试设置并清理夹具。JVM 测试覆盖进度交换、接口校验、三方合并、续传、字体元数据和 EPUB 内容解析；Android 回归覆盖实际阅读、文字选择、恢复、界面、数据库持久化及模拟云盘。需要用户书籍的可选测试默认跳过，书籍不会打包进仓库。
 
-## 数据兼容
+## 数据存储
 
-Room 当前为 v5，包含 v1→v2→v3→v4→v5 迁移。v4 增加云端删除记录，v5 增加逐书仅本地设置；应用不使用破坏性降级。手动进度 JSON 继续为 schemaVersion 1。升级前可备份阅读记录；旧版不能读取新数据库，不应直接降级。
-
-保留 Android 包名和固定签名。设备凭证读取同时兼容项目改名前后的 Keystore 别名；源码工程重命名不迁移用户私有书籍。
+本地书库、阅读记录、云端状态、删除标记及逐书仅本地设置保存在 Room 数据库（v1）中；手动进度 JSON 为 schemaVersion 1。设备凭证由 Android Keystore 加密保存。
 
 ## 原生 EPUB 的边界
 
-正文通过 `EpubChapterParser` 提取内容，`EpubTypesetter` 分页，`NativeEpubView` 绘制，`NativeEpubNavigatorFragment` 提供兼容的内容定位和翻页接口。常用结构受支持，完整 CSS、复杂文字塑形及出版者版式不等同于浏览器渲染。不要用旧 WebView 的测试或性能数字替代当前引擎实测。
+正文通过 `EpubChapterParser` 提取内容，`EpubTypesetter` 分页，`NativeEpubView` 绘制，`NativeEpubNavigatorFragment` 提供兼容的内容定位和翻页接口。常用结构受支持，完整 CSS、复杂文字塑形及出版者版式不等同于浏览器渲染。
 
 静止渲染采样只能说明该短时窗口的帧变化，不能推导真实墨水屏耗电或续航；实际设备刷新与休眠需单独验收。

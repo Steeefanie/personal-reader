@@ -121,11 +121,11 @@ class Repository(private val context: Context, val db: ReaderDatabase) {
     fun observeBookmarks(hash:String,ownerKey:String):Flow<List<Bookmark>> =
         (if(ownerKey=="local")dao.observeBookmarks(hash) else
             db.drive().observeStatePrefixes(ownerKey).map { bookmarks(hash,ownerKey) }).distinctUntilChanged()
-    private suspend fun cloudData(ownerKey: String, hash: String) = db.drive().state(ownerKey, hash)?.let { BookState.decodeStored(hash, it.currentJson) } ?: BookState.empty
+    private suspend fun cloudData(ownerKey: String, hash: String) = db.drive().state(ownerKey, hash)?.let { BookState.decode(hash, it.currentJson) } ?: BookState.empty
 
     suspend fun snapshot(ownerKey: String = owner.value): Exchange = db.withTransaction {
         if (ownerKey == "local") Exchange(dao.allProgress(), dao.allBookmarks()) else {
-            val states = db.drive().states(ownerKey).map { BookState.decodeStored(it.hash, it.currentJson) }
+            val states = db.drive().states(ownerKey).map { BookState.decode(it.hash, it.currentJson) }
             Exchange(states.flatMap { it.progress }, states.flatMap { it.bookmarks })
         }
     }

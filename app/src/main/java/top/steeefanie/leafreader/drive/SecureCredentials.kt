@@ -20,12 +20,9 @@ interface Credentials {
 class SecureCredentials(context: Context) : Credentials {
     private val storage = context.getSharedPreferences("drive-credentials", Context.MODE_PRIVATE)
     private val alias = "personal-reader-device-key-v1"
-    // Renaming the project must not invalidate credentials encrypted by earlier releases.
-    private val legacyAlias = "private-reader-device-key-v1"
     @Synchronized private fun key(): SecretKey {
         val store = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
         (store.getKey(alias, null) as? SecretKey)?.let { return it }
-        (store.getKey(legacyAlias, null) as? SecretKey)?.let { return it }
         return KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, "AndroidKeyStore").apply {
             init(KeyGenParameterSpec.Builder(alias, KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT)
                 .setBlockModes(KeyProperties.BLOCK_MODE_GCM).setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE).build())
@@ -36,19 +33,12 @@ class SecureCredentials(context: Context) : Credentials {
         val parts = stored.split(':', limit = 2)
         require(parts.size == 2) { "设备凭证损坏，请重新绑定" }
         val store = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
-        val keys = listOf(alias, legacyAlias).mapNotNull { store.getKey(it, null) as? SecretKey }
-        check(keys.isNotEmpty()) { "设备密钥不存在，请重新绑定" }
-        var failure: java.security.GeneralSecurityException? = null
-        for (candidate in keys) {
-            try {
-                return Cipher.getInstance("AES/GCM/NoPadding").run {
-                    init(Cipher.DECRYPT_MODE, candidate, GCMParameterSpec(128, Base64.decode(parts[0], Base64.NO_WRAP)))
-                    updateAAD(connectionId.toByteArray(Charsets.UTF_8))
-                    doFinal(Base64.decode(parts[1], Base64.NO_WRAP)).toString(Charsets.UTF_8)
-                }
-            } catch (e: java.security.GeneralSecurityException) { failure = e }
+        val key = store.getKey(alias, null) as? SecretKey ?: error("设备密钥不存在，请重新绑定")
+        return Cipher.getInstance("AES/GCM/NoPadding").run {
+            init(Cipher.DECRYPT_MODE, key, GCMParameterSpec(128, Base64.decode(parts[0], Base64.NO_WRAP)))
+            updateAAD(connectionId.toByteArray(Charsets.UTF_8))
+            doFinal(Base64.decode(parts[1], Base64.NO_WRAP)).toString(Charsets.UTF_8)
         }
-        throw checkNotNull(failure)
     }
     override fun write(connectionId: String, token: String) {
         require(token.isNotBlank() && token.none { it == '\r' || it == '\n' })

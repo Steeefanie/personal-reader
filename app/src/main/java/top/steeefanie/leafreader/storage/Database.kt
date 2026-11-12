@@ -58,7 +58,7 @@ interface ReaderDao {
     @Upsert suspend fun putBookmark(bookmark: Bookmark)
 }
 
-@Database(entities = [Book::class, Progress::class, Bookmark::class, BookAccess::class, DriveConnection::class, CloudState::class, CloudConflict::class, RemoteEntry::class, BookMetadata::class, DeletedCloudBook::class, LocalOnlyBook::class], version = 5, exportSchema = false)
+@Database(entities = [Book::class, Progress::class, Bookmark::class, BookAccess::class, DriveConnection::class, CloudState::class, CloudConflict::class, RemoteEntry::class, BookMetadata::class, DeletedCloudBook::class, LocalOnlyBook::class], version = 1, exportSchema = false)
 abstract class ReaderDatabase : RoomDatabase() {
     abstract fun dao(): ReaderDao
     abstract fun drive(): DriveDao

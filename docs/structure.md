@@ -4,7 +4,7 @@
 
 ## 应用代码
 
-应用包名保持 `top.steeefanie.leafreader`，避免项目改名导致安装和数据空间变化。
+应用包名为 `top.steeefanie.leafreader`。
 
 | 路径（`app/src/main/java/top/steeefanie/leafreader/` 下） | 职能 |
 | --- | --- |

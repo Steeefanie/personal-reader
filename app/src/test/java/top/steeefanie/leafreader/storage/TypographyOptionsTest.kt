@@ -14,19 +14,7 @@ class TypographyOptionsTest {
         assertEquals(ReadingSettings().paragraphSpacing,TypographyOptions.paragraphs[3],0.0)
         assertEquals(400,(ReadingSettings().fontWeight*400).toInt())
         assertEquals("system-default",ReadingSettings().font)
-    }
-    @Test fun paragraphScaleTightensExistingChoiceWithoutRepeatedReduction(){
         assertEquals(listOf(0.0,.125,.25,.5,.75,1.0,1.25),TypographyOptions.paragraphs)
-        assertEquals(.5,TypographyOptions.legacyParagraphSpacing(.75),0.0)
-        assertEquals(1.25,TypographyOptions.legacyParagraphSpacing(1.5),0.0)
-        assertEquals(0.0,TypographyOptions.legacyParagraphSpacing(0.0),0.0)
-        assertEquals(.5,TypographyOptions.legacyParagraphSpacing(Double.NaN),0.0)
-    }
-    @Test fun oldMultipliersMapToSizesAndInvalidValuesUseDefaults(){
-        assertEquals(22.0,TypographyOptions.legacySize(1.25),0.0)
-        assertEquals(27.0,TypographyOptions.legacySize(1.6),0.0)
-        assertEquals(36.0,TypographyOptions.legacySize(3.0),0.0)
-        assertEquals(22.0,TypographyOptions.legacySize(Double.NaN),0.0)
         assertEquals(1.8,TypographyOptions.nearest(TypographyOptions.lines,Double.POSITIVE_INFINITY,1.8),0.0)
     }
 }
