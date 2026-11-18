@@ -5,6 +5,7 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.RectF
 import android.graphics.Typeface
+import android.net.Uri
 import android.os.Bundle
 import android.util.LruCache
 import android.view.LayoutInflater
@@ -75,6 +76,8 @@ class NativeEpubNavigatorFragment : Fragment(), OverflowableNavigator {
     private var marks: List<Bookmark> = emptyList()
     private var resolved: List<ResolvedBookmarkRange> = emptyList()
     private var job: Job? = null
+    private var pendingTarget: Pair<Int, Target>? = null
+    private var currentAnchor: Target.Anchor? = null
     private var started = false
     private var loadedOnce = false
     private var laidW = 0
@@ -98,10 +101,10 @@ class NativeEpubNavigatorFragment : Fragment(), OverflowableNavigator {
             onLinkActivated = ::activateLink
             onSelectionChanged = { json, rect -> onSelection?.invoke(json?.also { j -> j.optJSONObject("readerTextRange")?.put("engine", "native") }, rect) }
             onBookmarkActivated = { mark, rect -> onBookmarkTap?.invoke(mark, rect) }
-            addOnLayoutChangeListener { v, _, _, _, _, _, _, _, _ ->
+            addOnLayoutChangeListener { v, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom ->
                 if (v.width <= 0 || v.height <= 0) return@addOnLayoutChangeListener
                 if (!started) { started = true; start() }
-                else if ((v.width != laidW || v.height != laidH) && chapterIndex >= 0) relayout()
+                else if (right - left != oldRight - oldLeft || bottom - top != oldBottom - oldTop) relayout()
             }
         }
         return pageView
@@ -130,17 +133,16 @@ class NativeEpubNavigatorFragment : Fragment(), OverflowableNavigator {
     val hasSelection: Boolean get() = ::pageView.isInitialized && pageView.hasSelection
 
     private fun relayout() {
-        val current = layout?.pages?.getOrNull(page)
-        show(chapterIndex.coerceAtLeast(0), current?.let { Target.Offset(it.bodyStart) } ?: Target.First, force = true)
+        val request = pendingTarget ?: layout?.pages?.getOrNull(page)?.let { chapterIndex to (currentAnchor ?: Target.Offset(it.bodyStart)) }
+        request?.let { (index, target) -> show(index, target, force = true) }
     }
 
     override fun go(locator: Locator, animated: Boolean): Boolean {
-        val href = locator.href.toString()
-        val index = indexOf(href)
+        val index = indexOf(locator.href)
         if (index < 0) return false
         val loc = locator.locations
         val offset = (loc.otherLocations["nativeBodyOffset"] as? Number)?.toInt()
-        val fragment = href.substringAfter('#', "").ifBlank { loc.fragments.firstOrNull().orEmpty() }
+        val fragment = locator.href.fragment ?: loc.fragments.firstOrNull().orEmpty()
         val highlight = locator.text.highlight?.takeIf { it.isNotBlank() }
         val target = when {
             offset != null -> Target.Offset(offset)
@@ -153,23 +155,47 @@ class NativeEpubNavigatorFragment : Fragment(), OverflowableNavigator {
     }
 
     override fun go(link: Link, animated: Boolean): Boolean {
-        val href = link.href.toString()
-        val index = indexOf(href)
+        val url = link.url()
+        val index = indexOf(url)
         if (index < 0) return false
-        val fragment = href.substringAfter('#', "")
-        show(index, if (fragment.isBlank()) Target.First else Target.Anchor(fragment)); return true
+        show(index, url.fragment?.let { Target.Anchor(it) } ?: Target.First)
+        return true
+    }
+
+    fun currentContentsIndex(entries: List<Link>): Int {
+        val current = layout ?: return -1
+        var bestIndex = -1
+        var bestChapter = -1
+        var bestBlock = -1
+        var bestOffset = -1
+        entries.forEachIndexed { index, link ->
+            val url = link.url()
+            val chapter = indexOf(url)
+            if (chapter < 0 || chapter > chapterIndex || chapter < bestChapter) return@forEachIndexed
+            val anchor = if (chapter == chapterIndex && url.fragment != null) {
+                val target = current.chapter.anchors[url.fragment] ?: return@forEachIndexed
+                if ((pageForAnchor(current, target) ?: return@forEachIndexed) > page) return@forEachIndexed
+                target
+            } else null
+            val block = anchor?.blockIndex ?: -1
+            val offset = anchor?.offset ?: -1
+            if (chapter < chapterIndex || chapter > bestChapter || block > bestBlock || (block == bestBlock && offset > bestOffset)) {
+                bestIndex = index; bestChapter = chapter; bestBlock = block; bestOffset = offset
+            }
+        }
+        return bestIndex
     }
 
     override fun goForward(animated: Boolean): Boolean {
         val current = layout ?: return false
-        if (page < current.pages.size - 1) { page++; render(); emit(); return true }
+        if (page < current.pages.size - 1) { page++; currentAnchor = null; render(); emit(); return true }
         if (chapterIndex < publication.readingOrder.size - 1) { show(chapterIndex + 1, Target.First); return true }
         return false
     }
 
     override fun goBackward(animated: Boolean): Boolean {
         if (layout == null) return false
-        if (page > 0) { page--; render(); emit(); return true }
+        if (page > 0) { page--; currentAnchor = null; render(); emit(); return true }
         if (chapterIndex > 0) { show(chapterIndex - 1, Target.Last); return true }
         return false
     }
@@ -179,7 +205,8 @@ class NativeEpubNavigatorFragment : Fragment(), OverflowableNavigator {
     override fun removeInputListener(listener: InputListener) { listeners -= listener }
 
     private fun show(index: Int, target: Target, force: Boolean = false) {
-        if (!started || !::pageView.isInitialized) { initialLocator = null; return }
+        if (!started || !::pageView.isInitialized) return
+        pendingTarget = index to target
         job?.cancel()
         job = viewLifecycleOwner.lifecycleScope.launch {
             val w = pageView.width; val h = pageView.height
@@ -197,6 +224,8 @@ class NativeEpubNavigatorFragment : Fragment(), OverflowableNavigator {
                 resolveMarks()
             }
             page = pageFor(layout!!, target)
+            currentAnchor = target as? Target.Anchor
+            pendingTarget = null
             render(); emit()
             if (!loadedOnce) { loadedOnce = true; onPageLoaded?.invoke() }
         }
@@ -257,13 +286,20 @@ class NativeEpubNavigatorFragment : Fragment(), OverflowableNavigator {
             is Target.Offset -> byOffset(target.value)
             is Target.Progression -> (target.value.coerceIn(0.0, 1.0) * pages.size).toInt().coerceIn(0, last)
             is Target.Anchor -> {
-                val block = layout.chapter.anchors[target.id]
-                    ?: runCatching { java.net.URLDecoder.decode(target.id, "UTF-8") }.getOrNull()?.let { layout.chapter.anchors[it] }
-                block?.let { b -> pages.indexOfFirst { p -> p.lines.any { it.blockIndex >= b } }.takeIf { it >= 0 } } ?: 0
+                val anchor = layout.chapter.anchors[target.id] ?: layout.chapter.anchors[Uri.decode(target.id)]
+                anchor?.let { pageForAnchor(layout, it) } ?: 0
             }
             is Target.Highlight -> findText(layout.chapter.fullText, target.text, target.before)?.let(::byOffset) ?: 0
         }
     }
+
+    private fun pageForAnchor(layout: ChapterLayout, anchor: EpubAnchor): Int? =
+        layout.pages.indexOfFirst { page ->
+            page.lines.any { line ->
+                line.blockIndex > anchor.blockIndex || (line.blockIndex == anchor.blockIndex &&
+                    (line.blockEndOffset > anchor.offset || line.blockStartOffset == line.blockEndOffset))
+            }
+        }.takeIf { it >= 0 }
 
     private fun findText(full: String, text: String, before: String?, near: Int = -1): Int? {
         val needle = text.trim()
@@ -337,20 +373,24 @@ class NativeEpubNavigatorFragment : Fragment(), OverflowableNavigator {
         val lower = href.lowercase()
         if (lower.startsWith("http://") || lower.startsWith("https://") || lower.startsWith("mailto:")) { onExternalLink?.invoke(href); return }
         val base = publication.readingOrder.getOrNull(chapterIndex)?.url() ?: return
-        val target = if (href.startsWith("#")) base.toString().substringBefore('#') + href else (Url(href)?.let { base.resolve(it) }?.toString() ?: return)
+        val target = Url(href)?.let { base.resolve(it) } ?: return
         val index = indexOf(target)
         if (index < 0) return
         onInternalLink?.invoke()
-        val fragment = target.substringAfter('#', "")
-        show(index, if (fragment.isBlank()) Target.First else Target.Anchor(fragment))
+        show(index, target.fragment?.let { Target.Anchor(it) } ?: Target.First)
     }
 
-    private fun indexOf(href: String): Int {
-        val wanted = stripFragment(href)
-        val order = publication.readingOrder
-        order.indexOfFirst { sameHref(stripFragment(it.url().toString()), wanted) }.takeIf { it >= 0 }?.let { return it }
-        return order.indexOfFirst { stripFragment(it.href.toString()).let { h -> sameHref(h, wanted) } }
+    private fun indexOf(url: Url): Int {
+        val wanted = resourcePath(url) ?: return -1
+        exactSpinePaths[wanted]?.let { return it }
+        return spinePaths.indices.singleOrNull { i -> spinePaths[i]?.let { sameHref(it, wanted) } == true } ?: -1
     }
+
+    private val spinePaths by lazy { publication.readingOrder.map { resourcePath(it.url()) } }
+    private val exactSpinePaths by lazy {
+        buildMap { spinePaths.forEachIndexed { i, path -> if (path != null) putIfAbsent(path, i) } }
+    }
+    private fun resourcePath(url: Url): String? = url.normalize().path?.trimStart('/')
 
     private fun sameHref(a: String, b: String): Boolean {
         if (a.isEmpty() || b.isEmpty()) return false
@@ -373,6 +413,8 @@ class NativeEpubNavigatorFragment : Fragment(), OverflowableNavigator {
 
     override fun onDestroyView() {
         job?.cancel()
+        pendingTarget = null
+        currentAnchor = null
         started = false
         loadedOnce = false
         laidW = 0

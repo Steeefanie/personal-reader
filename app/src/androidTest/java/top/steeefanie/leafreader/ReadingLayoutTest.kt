@@ -87,12 +87,33 @@ class ReadingLayoutTest {
         val input=source("sample.epub");val old=app.settings.read();val owner="native-display-${UUID.randomUUID()}";var book:Book?=null;var reader:ReaderActivity?=null
         try{
             app.repository.importBook(Uri.fromFile(input),app.engine::validate,owner);book=app.repository.dao.ownedBooks(owner).first()
-            app.settings.save(ReadingSettings(showPageNumbers=false,showStatusBar=false))
-            reader=ins.startActivitySync(Intent(app,ReaderActivity::class.java).putExtra("bookHash",book.hash).putExtra("ownerKey",owner).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) as ReaderActivity
-            navigator(reader);delay(500)
-            ins.runOnMainSync{
-                assertFalse(all(reader!!.window.decorView).first{it.contentDescription=="阅读页码"}.isShown)
-                assertFalse(ViewCompat.getRootWindowInsets(reader!!.window.decorView)!!.isVisible(WindowInsetsCompat.Type.statusBars()))
+            for (showStatus in listOf(true, false)) for (showPage in listOf(true, false)) {
+                app.settings.save(ReadingSettings(showPageNumbers=showPage,showStatusBar=showStatus))
+                val activity=ins.startActivitySync(Intent(app,ReaderActivity::class.java).putExtra("bookHash",book.hash).putExtra("ownerKey",owner).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) as ReaderActivity
+                reader=activity
+                val nav=navigator(activity)
+                until {
+                    var ready=false
+                    ins.runOnMainSync {
+                        ready=ViewCompat.getRootWindowInsets(activity.window.decorView)?.isVisible(WindowInsetsCompat.Type.statusBars())==showStatus
+                    }
+                    ready
+                }
+                ins.runOnMainSync {
+                    val footer=all(activity.window.decorView).first{it.contentDescription=="阅读页码"}
+                    val view=nav.publicationView as NativeEpubView
+                    val container=view.parent as View
+                    val root=container.parent as View
+                    val density=activity.resources.displayMetrics.density
+                    assertEquals(showPage,footer.isShown)
+                    assertEquals(if(showPage)footer.height else 0,root.height-root.paddingBottom-container.bottom)
+                    assertEquals(if(showStatus)0f else 8f,(container.top-root.paddingTop)/density,0.6f)
+                    val layout=checkNotNull(view.chapterLayout)
+                    assertEquals(12f,layout.marginTop/density,0.1f)
+                    assertEquals(12f,layout.marginBottom/density,0.1f)
+                    activity.finish()
+                }
+                ins.waitForIdleSync();reader=null
             }
         }finally{reader?.let{ins.runOnMainSync{it.finish()}};app.settings.save(old);book?.let{app.repository.remove(it,owner)};input.delete()}
     }

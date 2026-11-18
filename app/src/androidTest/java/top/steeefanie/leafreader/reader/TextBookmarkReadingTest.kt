@@ -8,6 +8,10 @@ import android.view.*
 import android.view.accessibility.AccessibilityNodeInfo
 import android.widget.TextView
 import androidx.test.platform.app.InstrumentationRegistry
+import com.tom_roush.pdfbox.android.PDFBoxResourceLoader
+import com.tom_roush.pdfbox.pdmodel.PDDocument
+import com.tom_roush.pdfbox.pdmodel.interactive.documentnavigation.outline.PDDocumentOutline
+import com.tom_roush.pdfbox.pdmodel.interactive.documentnavigation.outline.PDOutlineItem
 import kotlinx.coroutines.*
 import org.json.*
 import org.junit.Assert.*
@@ -21,6 +25,9 @@ import top.steeefanie.leafreader.ReaderApplication
 import top.steeefanie.leafreader.storage.*
 import java.io.File
 import java.util.UUID
+import java.util.zip.ZipEntry
+import java.util.zip.ZipFile
+import java.util.zip.ZipOutputStream
 
 class TextBookmarkReadingTest {
     private val ins=InstrumentationRegistry.getInstrumentation()
@@ -52,7 +59,7 @@ class TextBookmarkReadingTest {
         val bitmap=checkNotNull(ins.uiAutomation.takeScreenshot())
         File(app.cacheDir,"text-bookmarks-$name.png").outputStream().use { bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG,100,it) };bitmap.recycle()
     }
-    private suspend fun fixture(asset:String,body:suspend (ReaderActivity,OverflowableNavigator,Book,String)->Unit) {
+    private suspend fun fixture(asset:String,prepare:(File)->Unit={},body:suspend (ReaderActivity,OverflowableNavigator,Book,String)->Unit) {
         val owner="bookmark-test-${UUID.randomUUID()}";val old=app.settings.read()
         val source=File(app.cacheDir,"$owner.${asset.substringAfterLast('.')}");var book:Book?=null;var reader:ReaderActivity?=null
         try {
@@ -61,6 +68,7 @@ class TextBookmarkReadingTest {
             }
             app.settings.save(ReadingSettings())
             ins.context.assets.open(asset).use { input -> source.outputStream().use { input.copyTo(it) } }
+            prepare(source)
             app.repository.importBook(Uri.fromFile(source),app.engine::validate,owner)
             book=app.repository.dao.ownedBooks(owner).first()
             val publication=app.engine.open(source)
@@ -132,6 +140,83 @@ class TextBookmarkReadingTest {
         tap(reader,.5f);click(reader,"目录");clickNode("第二章");until{visible(reader,"返回原处")}
         tap(reader,.9f);until{!visible(reader,"返回原处")}
     }}
+    @Test fun contentsOpensAtCurrentAnchorAfterJumpDuringResize()=runBlocking {
+        fixture("traditional.epub", ::addContentsAnchors) { reader,navigator,_,_ ->
+            val epub=navigator as NativeEpubNavigatorFragment
+            val destination=epub.publication.tableOfContents.last()
+            ins.runOnMainSync {
+                assertTrue(epub.go(destination,false))
+                val page=epub.publicationView
+                page.layout(page.left,page.top,page.right,page.bottom-32)
+            }
+            until { epub.currentLocator.value.href.toString().endsWith("two.xhtml") && epub.pageIndex>0 }
+            tap(reader,.5f);click(reader,"目录")
+            node { it.text=="第32节" && it.isChecked && it.isVisibleToUser }
+            val latePage=epub.pageIndex
+            clickNode("第31节")
+            until { epub.pageIndex<latePage }
+            tap(reader,.5f);click(reader,"目录")
+            node { it.text=="第31节" && it.isChecked && it.isVisibleToUser }
+            clickNode("返回")
+        }
+    }
+
+    private fun addContentsAnchors(file: File) {
+        val modified=File.createTempFile("contents-", ".epub", file.parentFile)
+        try {
+            val sections=(1..30).map { it*2 to it } + listOf(65 to 31, 94 to 32)
+            ZipFile(file).use { source ->
+                ZipOutputStream(modified.outputStream()).use { output ->
+                    source.entries().asSequence().forEach { entry ->
+                        val bytes=source.getInputStream(entry).use { it.readBytes() }
+                        val updated=when(entry.name) {
+                            "nav.xhtml" -> {
+                                val items=sections.joinToString("") { (_, n) -> "<li><a href=\"two.xhtml#%E8%8A%82+$n\">第${n}节</a></li>" }
+                                bytes.decodeToString().replace("</ol>", "$items</ol>").encodeToByteArray()
+                            }
+                            "two.xhtml" -> sections.fold(bytes.decodeToString()) { html, (p,n) ->
+                                html.replace("<p>第${p}段", "<h2 id=\"节+$n\">第${n}节</h2><p>第${p}段")
+                            }.encodeToByteArray()
+                            else -> bytes
+                        }
+                        output.putNextEntry(ZipEntry(entry.name).apply {
+                            if (entry.name=="mimetype") { method=ZipEntry.STORED;size=entry.size;crc=entry.crc }
+                        })
+                        output.write(updated)
+                        output.closeEntry()
+                    }
+                }
+            }
+            modified.copyTo(file,overwrite=true)
+        } finally { modified.delete() }
+    }
+    @Test fun pdfContentsJumpsAndHighlightsLatestEntry()=runBlocking {
+        fixture("sample.pdf", ::addPdfContents) { reader,navigator,_,_ ->
+            tap(reader,.5f);click(reader,"目录");clickNode("第二节")
+            until { navigator.currentLocator.value.locations.position==2 }
+            tap(reader,.9f)
+            until { navigator.currentLocator.value.locations.position==3 }
+            tap(reader,.5f);click(reader,"目录")
+            node { it.text=="第二节" && it.isChecked && it.isVisibleToUser }
+            clickNode("返回")
+        }
+    }
+
+    private fun addPdfContents(file: File) {
+        PDFBoxResourceLoader.init(app)
+        val modified=File.createTempFile("contents-", ".pdf", file.parentFile)
+        try {
+            PDDocument.load(file).use { pdf ->
+                pdf.documentCatalog.documentOutline=PDDocumentOutline().apply {
+                    addLast(PDOutlineItem().apply { title="第一节";setDestination(pdf.getPage(0)) })
+                    addLast(PDOutlineItem().apply { title="第二节";setDestination(pdf.getPage(1)) })
+                }
+                pdf.save(modified)
+            }
+            modified.copyTo(file,overwrite=true)
+        } finally { modified.delete() }
+    }
+
     @Test fun pdfKeepsTopRightPageBookmarkAndFailedTurnKeepsReturn()=runBlocking { fixture("sample.pdf") { reader,navigator,book,owner ->
         tap(reader,.5f);until { visible(reader,"添加本页书签") };click(reader,"添加本页书签")
         withTimeout(10000){while(app.repository.bookmarks(book.hash,owner).none { !it.deleted })delay(50)}

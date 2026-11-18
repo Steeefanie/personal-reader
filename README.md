@@ -2,11 +2,13 @@
 
 面向墨水屏的 Android 本地阅读器。支持无 DRM 的 EPUB、PDF，使用简体中文界面，书籍复制到应用私有目录后可离线阅读。云盘为可选的独立 HTTP 接口能力，不依赖任何指定网盘工程。
 
-[下载 1.0.0 APK](https://github.com/Steeefanie/personal-reader/releases/tag/v1.0.0) · [使用与构建文档](docs/README.md) · [验证记录](VALIDATION.md) · [发布说明](docs/releases/v1.0.0.md)
+[下载 1.0.1 APK](https://github.com/Steeefanie/personal-reader/releases/tag/v1.0.1) · [使用与构建文档](docs/README.md) · [验证记录](VALIDATION.md) · [发布说明](docs/releases/v1.0.1.md)
 
 ## 安装
 
-从 Release 下载 `personal-reader-1.0.0-arm64.apk`，在 Android 设备上允许安装该来源的应用后安装。最低 Android 7.0（API 24），此安装包适用于 ARM64 设备；x86 模拟器请自行构建调试包。不同来源自行构建的 APK 签名不同，不能直接覆盖安装。
+从 Release 下载 `personal-reader-1.0.1-arm64.apk`，在 Android 设备上允许安装该来源的应用后安装。最低 Android 7.0（API 24），此安装包适用于 ARM64 设备；x86 模拟器请自行构建调试包。不同来源自行构建的 APK 签名不同，不能直接覆盖安装。
+
+从 1.0.1 起，可在「设置 → 关于 → 检查更新」下载后续正式版本，并通过 Android 系统确认覆盖安装。
 
 ## 功能
 
@@ -55,7 +57,7 @@ EPUB 显示页数随排版和屏幕变化；当前整书页数由已测章节与
 | `gradle/`、`gradlew*` | 固定版本构建入口 | 是 |
 | `docs/` | 接口、开发与发布说明 | 是 |
 | `work/` | 本机工具链、缓存、私有签名和验证原始记录 | 否 |
-| `outputs/1.0.0/` | 版本 APK 与校验值，APK 通过 Release 分发 | 否 |
+| `outputs/<版本>/` | 版本 APK 与校验值，APK 通过 Release 分发 | 否 |
 | `app/build/`、`build/`、`.gradle/`、`.kotlin/` | 可再生成的构建产物和缓存 | 否 |
 
 Windows 调试构建：
@@ -70,4 +72,4 @@ $env:ANDROID_HOME = '<Android SDK 目录>'
 
 ## 验证边界
 
-1.0.0 的构建、测试数量及 APK 校验值以 [VALIDATION.md](VALIDATION.md) 为准。模拟器不能验证真实墨水屏的残影、刷新质量、实体／蓝牙翻页器和长期耗电；Leaf5+ 真机与实际云盘服务仍须分别验收。仓库不包含用户书籍、设备数据、账号凭证或签名私钥。
+1.0.1 的构建、测试数量及 APK 校验值以 [VALIDATION.md](VALIDATION.md) 为准。模拟器不能验证真实墨水屏的残影、刷新质量、实体／蓝牙翻页器和长期耗电；Leaf5+ 真机与实际云盘服务仍须分别验收。仓库不包含用户书籍、设备数据、账号凭证或签名私钥。

@@ -7,6 +7,7 @@ import android.view.*
 import android.widget.*
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.viewModels
+import androidx.core.view.WindowCompat
 import top.steeefanie.leafreader.ui.PaperPanel as AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.fragment.app.Fragment
@@ -42,6 +43,7 @@ import java.util.UUID
 import kotlin.math.abs
 import kotlin.math.roundToInt
 import org.readium.r2.shared.publication.services.positionsByReadingOrder
+import top.steeefanie.leafreader.reader.epub.NativeEpubNavigatorFragment
 
 class ReaderActivity : PaperActivity() {
     private val app get() = application as ReaderApplication
@@ -91,6 +93,7 @@ class ReaderActivity : PaperActivity() {
         // Reader factories depend on an asynchronously opened publication. Rebuild the fragment
         // from persisted Locator instead of restoring a factory-less Fragment after process death.
         super.onCreate(null)
+        WindowCompat.setDecorFitsSystemWindows(window, false)
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
                 if (textBookmarks?.isSelecting == true || textBookmarks?.hasPopup == true) {
@@ -121,7 +124,7 @@ class ReaderActivity : PaperActivity() {
             gravity=Gravity.CENTER;setBackgroundColor(android.graphics.Color.WHITE);setTextColor(Paper.secondary)
             contentDescription="阅读页码";visibility=View.GONE
         }
-        root.addView(footerPage,FrameLayout.LayoutParams(-1,dp(32),Gravity.BOTTOM))
+        root.addView(footerPage,FrameLayout.LayoutParams(-1,dp(24),Gravity.BOTTOM))
 
         chrome=FrameLayout(this)
         val top=column()
@@ -359,13 +362,18 @@ class ReaderActivity : PaperActivity() {
     }
     private fun applyReadingDisplay(){
         val settings=state.preferences
-        val height=dp(32)
+        val epub=state.book?.format=="epub"
+        val height=maxOf(dp(24),footerPage.lineHeight+dp(4))
         footerPage.visibility=if(settings.showPageNumbers)View.VISIBLE else View.GONE
         footerPage.layoutParams=(footerPage.layoutParams as FrameLayout.LayoutParams).apply{this.height=height}
         container.layoutParams=(container.layoutParams as FrameLayout.LayoutParams).apply{
-            bottomMargin=if(settings.showPageNumbers)height else dp(16)
-            // Without the status bar the window reaches the screen edge; keep text off the top edge.
-            topMargin=if(settings.showStatusBar)0 else dp(28)
+            bottomMargin=if(settings.showPageNumbers)height else dp(if(epub)0 else 12)
+            // EPUB adds its own vertical padding during pagination. PDF uses the viewport margins.
+            topMargin=dp(when {
+                settings.showStatusBar -> if(epub)0 else 4
+                epub -> 8
+                else -> 14
+            })
         }
         val control=androidx.core.view.WindowInsetsControllerCompat(window,readingRoot)
         control.systemBarsBehavior=androidx.core.view.WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
@@ -474,16 +482,16 @@ class ReaderActivity : PaperActivity() {
         currentPoint()?.let { state.jumpOrigin=it;returnToOrigin.visibility=View.VISIBLE }
     }
     private fun clearJumpOrigin() { state.jumpOrigin=null;returnToOrigin.visibility=View.GONE }
-    private fun performJump(action:()->Boolean) {
+    private fun performJump(action:()->Boolean):Boolean {
         manualTurnFrom=null
-        val origin=currentPoint() ?: return
+        val origin=currentPoint() ?: return false
         textBookmarks?.finishSelection();hideChrome()
         ignoreJumpHistory=true
         val accepted=try { action() } finally { ignoreJumpHistory=false }
         if(accepted){state.jumpOrigin=origin;returnToOrigin.visibility=View.VISIBLE}
+        return accepted
     }
-    private fun jumpTo(locator:Locator) = performJump { navigator?.go(locator,false) ?: false }
-    private fun jumpTo(link:Link) = performJump { navigator?.go(link,false) ?: false }
+    private fun jumpTo(locator:Locator) { performJump { navigator?.go(locator,false) ?: false } }
     private fun returnFromJump() {
         val origin=state.jumpOrigin ?: return
         val locator=runCatching { Locator.fromJSON(JSONObject(origin.locator)) }.getOrNull() ?: return
@@ -529,7 +537,8 @@ class ReaderActivity : PaperActivity() {
     override fun onDestroy() { searchJob?.cancel();textBookmarks?.close(); navigator?.removeInputListener(input); navigator = null; super.onDestroy() }
 
     private fun contents() {
-        if (navigator == null) return
+        val nav = navigator ?: return
+        if (!readyToSave) { message("正在加载页面，请稍后再试"); return }
         val links = mutableListOf<Pair<String, Link>>()
         fun flatten(items: List<Link>, depth: Int) { items.forEach { link ->
             links += ("  ".repeat(depth.coerceAtMost(8)) + (link.title ?: "章节")) to link
@@ -537,12 +546,24 @@ class ReaderActivity : PaperActivity() {
         } }
         flatten(publication.tableOfContents, 0)
         if (links.isEmpty()) { message("本书没有目录"); return }
+        val entries = links.map { it.second }
+        val current = if (nav is NativeEpubNavigatorFragment) nav.currentContentsIndex(entries) else {
+            val page = nav.currentLocator.value.locations.position ?: 1
+            entries.indices.mapNotNull { index ->
+                val locator = publication.locatorFromLink(entries[index]) ?: return@mapNotNull null
+                val target = locator.locations.fragments.firstNotNullOfOrNull {
+                    it.takeIf { it.startsWith("page=") }?.substringAfter('=')?.substringBefore('&')?.toIntOrNull()
+                } ?: locator.locations.position ?: 1
+                (index to target).takeIf { target in 1..page }
+            }.maxByOrNull { it.second }?.first ?: -1
+        }
         showDialog(
             AlertDialog.Builder(this)
                 .setTitle("目录")
                 .fullScreen()
-                .setItems(links.map { it.first }.toTypedArray()) { _, index ->
-                    jumpTo(links[index].second)
+                .setSingleChoiceItems(links.map { it.first }.toTypedArray(), current) { dialog, index ->
+                    dialog.dismiss()
+                    if (!performJump { nav.go(entries[index], false) }) message("无法跳转到该目录位置")
                 }
         )
     }

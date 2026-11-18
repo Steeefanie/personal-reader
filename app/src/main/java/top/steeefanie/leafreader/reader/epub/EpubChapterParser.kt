@@ -34,11 +34,13 @@ data class EpubBlock(
     val anchorIds: List<String> = emptyList()
 )
 
+data class EpubAnchor(val blockIndex: Int, val offset: Int)
+
 data class ParsedChapter(
     val title: String,
     val fullText: String,
     val blocks: List<EpubBlock>,
-    val anchors: Map<String, Int>
+    val anchors: Map<String, EpubAnchor>
 )
 
 object EpubChapterParser {
@@ -63,7 +65,7 @@ object EpubChapterParser {
     fun parse(rawHtml: String, fallbackTitle: String = ""): ParsedChapter {
         val cleaned = preprocessHtml(rawHtml)
         val blocks = mutableListOf<EpubBlock>()
-        val anchors = mutableMapOf<String, Int>()
+        val anchors = mutableMapOf<String, EpubAnchor>()
         val fullTextBuilder = StringBuilder()
         var chapterTitle: String? = null
 
@@ -73,7 +75,7 @@ object EpubChapterParser {
         var currentTag = "p"
         val currentText = StringBuilder()
         val currentSpans = mutableListOf<InlineSpan>()
-        val pendingAnchors = mutableListOf<String>()
+        val pendingAnchors = mutableListOf<Pair<String, Int>>()
         val tagCounters = mutableMapOf<String, Int>()
         var consecutiveBrs = 0
         var inPre = false
@@ -103,6 +105,15 @@ object EpubChapterParser {
             while (s < e && isSpaceChar(raw[s])) s++
             while (e > s && isSpaceChar(raw[e - 1])) e--
             return s to e
+        }
+
+        fun attachAnchors(blockIndex: Int, start: Int = 0, length: Int = 1): List<String> {
+            val ids = pendingAnchors.map { (id, offset) ->
+                anchors.putIfAbsent(id, EpubAnchor(blockIndex, (offset - start).coerceIn(0, length - 1)))
+                id
+            }
+            pendingAnchors.clear()
+            return ids
         }
 
         fun flushBlock(selectorOverride: String? = null) {
@@ -142,11 +153,7 @@ object EpubChapterParser {
             val bodyEnd = fullTextBuilder.length
 
             val blockIndex = blocks.size
-            val anchorsForBlock = pendingAnchors.toList()
-            pendingAnchors.clear()
-            anchorsForBlock.forEach { id ->
-                if (id.isNotBlank() && id !in anchors) anchors[id] = blockIndex
-            }
+            val anchorsForBlock = attachAnchors(blockIndex, trimStart, length)
 
             val effectiveKind = if (currentKind == BlockKind.PARAGRAPH && inQuote > 0) BlockKind.QUOTE else currentKind
             if (chapterTitle == null && effectiveKind in setOf(BlockKind.HEADING_1, BlockKind.HEADING_2, BlockKind.HEADING_3)) {
@@ -170,13 +177,8 @@ object EpubChapterParser {
 
         fun emitImage(src: String) {
             if (src.isBlank()) return
-            flushBlock()
             val blockIndex = blocks.size
-            val anchorsForBlock = pendingAnchors.toList()
-            pendingAnchors.clear()
-            anchorsForBlock.forEach { id ->
-                if (id.isNotBlank() && id !in anchors) anchors[id] = blockIndex
-            }
+            val anchorsForBlock = attachAnchors(blockIndex)
             val bodyPos = fullTextBuilder.length
             blocks += EpubBlock(
                 index = blockIndex,
@@ -192,7 +194,6 @@ object EpubChapterParser {
         }
 
         fun emitRule() {
-            flushBlock()
             val blockIndex = blocks.size
             val bodyPos = fullTextBuilder.length
             blocks += EpubBlock(
@@ -202,7 +203,8 @@ object EpubChapterParser {
                 bodyStart = bodyPos,
                 bodyEnd = bodyPos,
                 cssSelector = nextSelector("hr"),
-                align = BlockAlign.CENTER
+                align = BlockAlign.CENTER,
+                anchorIds = attachAnchors(blockIndex)
             )
         }
 
@@ -262,25 +264,28 @@ object EpubChapterParser {
                         } else if (tag in IGNORED_SUBTREES) {
                             ignoredDepth = 1
                         } else {
-                            // Capture anchor IDs
+                            val imageSrc = if (tag == "img" || tag == "image") {
+                                (attr(parser, "src") ?: attr(parser, "xlink:href") ?: attr(parser, "href"))
+                                    ?.takeIf { it.isNotBlank() }
+                            } else null
+                            if (tag in BLOCK_TAGS || imageSrc != null) flushBlock()
                             val idAttr = attr(parser, "id") ?: attr(parser, "name")
-                            if (!idAttr.isNullOrBlank()) pendingAnchors += idAttr
+                            if (!idAttr.isNullOrBlank()) pendingAnchors += idAttr to currentText.length
 
                             val alignAttr = parseAlign(attr(parser, "align"), attr(parser, "style"), attr(parser, "class"))
 
                             when (tag) {
-                                "h1" -> { flushBlock(); currentKind = BlockKind.HEADING_1; currentTag = "h1"; currentAlign = alignAttr ?: BlockAlign.START }
-                                "h2" -> { flushBlock(); currentKind = BlockKind.HEADING_2; currentTag = "h2"; currentAlign = alignAttr ?: BlockAlign.START }
-                                "h3" -> { flushBlock(); currentKind = BlockKind.HEADING_3; currentTag = "h3"; currentAlign = alignAttr ?: BlockAlign.START }
-                                "h4" -> { flushBlock(); currentKind = BlockKind.HEADING_4; currentTag = "h4"; currentAlign = alignAttr ?: BlockAlign.START }
-                                "h5" -> { flushBlock(); currentKind = BlockKind.HEADING_5; currentTag = "h5"; currentAlign = alignAttr ?: BlockAlign.START }
-                                "h6" -> { flushBlock(); currentKind = BlockKind.HEADING_6; currentTag = "h6"; currentAlign = alignAttr ?: BlockAlign.START }
-                                "p" -> { flushBlock(); currentKind = BlockKind.PARAGRAPH; currentTag = "p"; currentAlign = alignAttr ?: BlockAlign.START }
-                                "blockquote" -> { flushBlock(); inQuote++; currentKind = BlockKind.QUOTE; currentTag = "blockquote"; currentAlign = alignAttr ?: BlockAlign.START }
-                                "li" -> { flushBlock(); currentKind = BlockKind.LIST_ITEM; currentTag = "li"; currentAlign = alignAttr ?: BlockAlign.START }
-                                "pre" -> { flushBlock(); inPre = true; currentKind = BlockKind.PRE; currentTag = "pre"; currentAlign = BlockAlign.START }
+                                "h1" -> { currentKind = BlockKind.HEADING_1; currentTag = "h1"; currentAlign = alignAttr ?: BlockAlign.START }
+                                "h2" -> { currentKind = BlockKind.HEADING_2; currentTag = "h2"; currentAlign = alignAttr ?: BlockAlign.START }
+                                "h3" -> { currentKind = BlockKind.HEADING_3; currentTag = "h3"; currentAlign = alignAttr ?: BlockAlign.START }
+                                "h4" -> { currentKind = BlockKind.HEADING_4; currentTag = "h4"; currentAlign = alignAttr ?: BlockAlign.START }
+                                "h5" -> { currentKind = BlockKind.HEADING_5; currentTag = "h5"; currentAlign = alignAttr ?: BlockAlign.START }
+                                "h6" -> { currentKind = BlockKind.HEADING_6; currentTag = "h6"; currentAlign = alignAttr ?: BlockAlign.START }
+                                "p" -> { currentKind = BlockKind.PARAGRAPH; currentTag = "p"; currentAlign = alignAttr ?: BlockAlign.START }
+                                "blockquote" -> { inQuote++; currentKind = BlockKind.QUOTE; currentTag = "blockquote"; currentAlign = alignAttr ?: BlockAlign.START }
+                                "li" -> { currentKind = BlockKind.LIST_ITEM; currentTag = "li"; currentAlign = alignAttr ?: BlockAlign.START }
+                                "pre" -> { inPre = true; currentKind = BlockKind.PRE; currentTag = "pre"; currentAlign = BlockAlign.START }
                                 "div", "section", "article", "header", "footer", "aside", "figcaption", "tr", "dt", "dd" -> {
-                                    flushBlock()
                                     currentKind = if (inQuote > 0) BlockKind.QUOTE else BlockKind.PARAGRAPH
                                     currentTag = if (tag in LEAF_BLOCK_TAGS) tag else "p"
                                     if (alignAttr != null) currentAlign = alignAttr
@@ -295,12 +300,7 @@ object EpubChapterParser {
                                         currentText.append("  ")
                                     }
                                 }
-                                "img", "image" -> {
-                                    val src = attr(parser, "src")
-                                        ?: attr(parser, "xlink:href")
-                                        ?: attr(parser, "href")
-                                    if (!src.isNullOrBlank()) emitImage(src)
-                                }
+                                "img", "image" -> imageSrc?.let(::emitImage)
                                 "b", "strong" -> openSpans.add(OpenSpan(SpanKind.BOLD, currentText.length))
                                 "i", "em", "cite", "dfn", "var" -> openSpans.add(OpenSpan(SpanKind.ITALIC, currentText.length))
                                 "sup", "rt" -> openSpans.add(OpenSpan(SpanKind.SUP, currentText.length))
@@ -385,8 +385,10 @@ object EpubChapterParser {
 
         // Attach any trailing anchors to the last block
         if (pendingAnchors.isNotEmpty() && blocks.isNotEmpty()) {
-            val lastIdx = blocks.lastIndex
-            pendingAnchors.forEach { id -> if (id.isNotBlank() && id !in anchors) anchors[id] = lastIdx }
+            val last = blocks.last()
+            pendingAnchors.forEach { (id, _) ->
+                anchors.putIfAbsent(id, EpubAnchor(last.index, (last.text.length - 1).coerceAtLeast(0)))
+            }
         }
 
         return ParsedChapter(

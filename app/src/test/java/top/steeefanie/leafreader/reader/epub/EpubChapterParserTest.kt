@@ -30,7 +30,7 @@ class EpubChapterParserTest {
         assertEquals(BlockKind.HEADING_1, h1.kind)
         assertEquals("第一章 启程", h1.text)
         assertEquals(listOf("c1"), h1.anchorIds)
-        assertEquals(0, parsed.anchors["c1"])
+        assertEquals(EpubAnchor(0, 0), parsed.anchors["c1"])
 
         val p = parsed.blocks[1]
         assertEquals(BlockKind.PARAGRAPH, p.kind)
@@ -99,9 +99,16 @@ class EpubChapterParserTest {
         assertEquals("../Images/cover.jpg", parsed.blocks[1].imageHref)
         assertEquals(BlockKind.RULE, parsed.blocks[2].kind)
 
-        assertEquals(0, parsed.anchors["sec1"])
-        assertEquals(0, parsed.anchors["note1"])
-        assertEquals(1, parsed.anchors["img1"])
+        assertEquals(EpubAnchor(0, 0), parsed.anchors["sec1"])
+        assertEquals(EpubAnchor(0, 3), parsed.anchors["note1"])
+        assertEquals(EpubAnchor(1, 0), parsed.anchors["img1"])
+    }
+
+    @Test
+    fun blockAnchorsAreAttachedAfterPendingText() {
+        val parsed = EpubChapterParser.parse("<div>前一段<h2 id=\"章节+2\">下一节</h2>图前<img id=\"图\" src=\"a.jpg\" /></div>")
+        assertEquals(EpubAnchor(1, 0), parsed.anchors["章节+2"])
+        assertEquals(EpubAnchor(3, 0), parsed.anchors["图"])
     }
 
     @Test

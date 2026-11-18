@@ -76,8 +76,8 @@ object EpubTypesetter {
         val safeHeight = max(height, 200)
         val baseFontSizePx = (settings.fontSize * density).toFloat().coerceAtLeast(12f)
         val marginH = (24f * density * settings.margins.toFloat()).coerceIn(12f * density, safeWidth * 0.28f)
-        val marginTop = 18f * density
-        val marginBottom = 18f * density
+        val marginTop = 12f * density
+        val marginBottom = 12f * density
 
         val contentLeft = marginH
         val contentRight = (safeWidth - marginH).coerceAtLeast(contentLeft + 80f)

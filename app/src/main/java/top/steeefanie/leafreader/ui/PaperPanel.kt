@@ -43,7 +43,11 @@ class PaperPanel private constructor(context: Context, private val spec: Builder
             spec.items!=null -> ListView(context).apply {
                 divider=context.contentDivider();dividerHeight=context.dp(1)
                 adapter=context.paperTextAdapter(spec.items!!.toList(),singleChoice=spec.checked>=0,alignEnd=spec.itemsEnd)
-                if(spec.checked>=0){choiceMode=ListView.CHOICE_MODE_SINGLE;setItemChecked(spec.checked,true)}
+                if(spec.checked>=0){
+                    choiceMode=ListView.CHOICE_MODE_SINGLE
+                    setItemChecked(spec.checked,true)
+                    setSelectionFromTop(spec.checked,0)
+                }
                 setOnItemClickListener{_,_,index,_->
                     spec.selection?.onClick(this@PaperPanel,index)
                     if(spec.checked<0)dismiss()
