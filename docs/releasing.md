@@ -21,6 +21,7 @@ $env:READER_KEY_PASSWORD = [Net.NetworkCredential]::new('', (Read-Host '签名�
 ## 核验与交付
 
 - 检查 `app/build/outputs/apk/release/app-release.apk` 的包名、版本、minSdk、ARM64 架构和非 debuggable 标记。
+- 从 GitHub Release 取得上一个正式 APK，用 `aapt dump badging` 比较两个安装包的实际 `versionCode`。新包的构建号必须大于上一个正式 APK 的构建号。
 - 用 Android SDK 的 `apksigner verify --verbose --print-certs` 验证签名，证书指纹应与既有发布一致。
 - 在测试模拟器验证待发布版本的源码。ARM64 Release 包应在 ARM64 设备实测；x86 模拟器测试不能替代该验证。
 - 将 APK 命名为 `personal-reader-<versionName>-arm64.apk`，与 `SHA256SUMS.txt` 放在 `outputs/<versionName>/`。R8 mapping 只保存在本机验证目录。

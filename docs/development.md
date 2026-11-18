@@ -32,7 +32,7 @@ adb -s emulator-5554 shell am instrument -w top.steeefanie.leafreader.test/andro
 
 ## 数据存储
 
-本地书库、阅读记录、云端状态、删除标记及逐书仅本地设置保存在 Room 数据库（v1）中；手动进度 JSON 为 schemaVersion 1。设备凭证由 Android Keystore 加密保存。
+本地书库、阅读记录、云端状态、删除标记及逐书仅本地设置保存在 Room 数据库中。数据库版本为 5，与正式发布的 1.0.0 一致。手动进度 JSON 为 schemaVersion 1。设备凭证由 Android Keystore 加密保存。
 
 ## 原生 EPUB 的边界
 
