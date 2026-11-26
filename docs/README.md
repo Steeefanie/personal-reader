@@ -1,6 +1,6 @@
 # 文档索引
 
-当前版本为 **图书 1.0.1**。
+当前版本为 **图书 1.0.2**。
 
 | 文档 | 内容 |
 | --- | --- |
@@ -14,6 +14,7 @@
 | [进度 JSON 示例](progress-format.json) | schemaVersion 1 的单书记录 |
 | [文字书签](text-bookmarks.md) | 内容范围、定位锚点及返回原处 |
 | [连接页导航](connection-navigation.md) | 两个入口与返回栈 |
+| [1.0.2 发布说明](releases/v1.0.2.md) | EPUB 破折号显示修复与下载信息 |
 | [1.0.1 发布说明](releases/v1.0.1.md) | 更新内容与下载信息 |
 | [1.0.0 发布说明](releases/v1.0.0.md) | 首发功能与下载信息 |
 | [验证记录](../VALIDATION.md) | 当前构建和测试结论 |

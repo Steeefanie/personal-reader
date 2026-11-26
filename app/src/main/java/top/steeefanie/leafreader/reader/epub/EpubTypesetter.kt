@@ -60,7 +60,10 @@ object EpubTypesetter {
     const val FLAG_LINK = 32
     const val FLAG_WHITESPACE = 64
 
-    private const val NO_START_PUNCT = "，。、；：？！）》」』】〉》”’—…·.,:;?!)]}%"
+    internal const val FLAG_DASH_START = 128
+    internal const val FLAG_DASH_CONTINUATION = 256
+
+    private const val NO_START_PUNCT = "，。、；：？！）》」』】〉》”’—⸺…·.,:;?!)]}%"
     private const val NO_END_PUNCT = "（《「『【〈《“‘([{"
 
     fun layout(
@@ -266,6 +269,24 @@ object EpubTypesetter {
                         }
                         paint.isFakeBoldText = false
                     }
+                    // Preserve character positions for selections and bookmarks within a single stroke.
+                    var dashIndex = 0
+                    while (dashIndex < n) {
+                        when {
+                            text[dashIndex] == '⸺' -> {
+                                flags[dashIndex] = flags[dashIndex] or FLAG_DASH_START
+                                widths[dashIndex] = blockFontSizePx * 2f
+                            }
+                            text[dashIndex] == '—' && text.getOrNull(dashIndex + 1) == '—' -> {
+                                flags[dashIndex] = flags[dashIndex] or FLAG_DASH_START
+                                widths[dashIndex] = blockFontSizePx
+                                dashIndex++
+                                flags[dashIndex] = flags[dashIndex] or FLAG_DASH_CONTINUATION
+                                widths[dashIndex] = blockFontSizePx
+                            }
+                        }
+                        dashIndex++
+                    }
                     for (i in 0 until n) {
                         if ((flags[i] and (FLAG_SUP or FLAG_SUB)) != 0) {
                             widths[i] *= 0.72f
@@ -316,7 +337,8 @@ object EpubTypesetter {
                             if (ch == '\n') {
                                 break
                             }
-                            val cw = widths[lineEnd]
+                            val dashPair = lineEnd + 1 < n && (flags[lineEnd + 1] and FLAG_DASH_CONTINUATION) != 0
+                            val cw = widths[lineEnd] + if (dashPair) widths[lineEnd + 1] else 0f
                             if (measuredW + cw > availableWidth && lineEnd > lineStart) {
                                 // Check if we are in the middle of an ASCII word/number
                                 if (isAsciiWordChar(ch) && isAsciiWordChar(text[lineEnd - 1]) && lastWordBreak > lineStart) {
@@ -347,10 +369,15 @@ object EpubTypesetter {
                                 break
                             }
                             measuredW += cw
-                            lineEnd++
+                            lineEnd += if (dashPair) 2 else 1
                             if (!isAsciiWordChar(ch)) {
                                 lastWordBreak = lineEnd
                             }
+                        }
+
+                        // Punctuation backtracking can otherwise leave the first half alone on a line.
+                        if (lineEnd < n && (flags[lineEnd] and FLAG_DASH_CONTINUATION) != 0) {
+                            lineEnd += if (lineEnd == lineStart + 1) 1 else -1
                         }
 
                         val endedWithNewline = lineEnd < n && text[lineEnd] == '\n'
@@ -388,6 +415,7 @@ object EpubTypesetter {
                             if (idx >= n - 1) return false
                             val c1 = text[idx]; val c2 = text[idx + 1]
                             return when {
+                                (flags[idx + 1] and FLAG_DASH_CONTINUATION) != 0 -> false
                                 c1 == ' ' || c2 == ' ' -> true
                                 isAsciiWordChar(c1) && isAsciiWordChar(c2) -> false
                                 else -> true

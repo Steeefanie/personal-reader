@@ -238,8 +238,22 @@ class NativeEpubView(context: Context) : View(context) {
                     isSub -> line.baseline + line.textSizePx * 0.15f
                     else -> line.baseline
                 }
-                charBuffer[0] = ch
-                canvas.drawText(charBuffer, 0, 1, line.charLeft[i], drawY, textPaint)
+                when {
+                    (flag and EpubTypesetter.FLAG_DASH_START) != 0 -> {
+                        val end = if (ch == '—') i + 1 else i
+                        val centerY = (line.top + line.bottom) * 0.5f + (drawY - line.baseline)
+                        val halfThickness = max(1f, textPaint.textSize * 0.055f) *
+                            if (textPaint.isFakeBoldText) 0.7f else 0.5f
+                        canvas.drawRect(
+                            line.charLeft[i], centerY - halfThickness,
+                            line.charRight[end], centerY + halfThickness, textPaint
+                        )
+                    }
+                    (flag and EpubTypesetter.FLAG_DASH_CONTINUATION) == 0 -> {
+                        charBuffer[0] = ch
+                        canvas.drawText(charBuffer, 0, 1, line.charLeft[i], drawY, textPaint)
+                    }
+                }
 
                 if ((flag and EpubTypesetter.FLAG_LINK) != 0) {
                     val linkY = line.baseline + 3f * density

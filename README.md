@@ -2,11 +2,11 @@
 
 面向墨水屏的 Android 本地阅读器。支持无 DRM 的 EPUB、PDF，使用简体中文界面，书籍复制到应用私有目录后可离线阅读。云盘为可选的独立 HTTP 接口能力，不依赖任何指定网盘工程。
 
-[下载 1.0.1 APK](https://github.com/Steeefanie/personal-reader/releases/tag/v1.0.1) · [使用与构建文档](docs/README.md) · [验证记录](VALIDATION.md) · [发布说明](docs/releases/v1.0.1.md)
+[下载 1.0.2 APK](https://github.com/Steeefanie/personal-reader/releases/tag/v1.0.2) · [使用与构建文档](docs/README.md) · [验证记录](VALIDATION.md) · [发布说明](docs/releases/v1.0.2.md)
 
 ## 安装
 
-从 Release 下载 `personal-reader-1.0.1-arm64.apk`，在 Android 设备上允许安装该来源的应用后安装。最低 Android 7.0（API 24），此安装包适用于 ARM64 设备；x86 模拟器请自行构建调试包。不同来源自行构建的 APK 签名不同，不能直接覆盖安装。
+从 Release 下载 `personal-reader-1.0.2-arm64.apk`，在 Android 设备上允许安装该来源的应用后安装。最低 Android 7.0（API 24），此安装包适用于 ARM64 设备；x86 模拟器请自行构建调试包。不同来源自行构建的 APK 签名不同，不能直接覆盖安装。
 
 从 1.0.1 起，可在「设置 → 关于 → 检查更新」下载后续正式版本，并通过 Android 系统确认覆盖安装。
 

@@ -2,6 +2,10 @@
 package top.steeefanie.leafreader
 
 import android.content.Intent
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.Color
+import android.graphics.Typeface
 import android.net.Uri
 import android.os.SystemClock
 import android.view.*
@@ -74,6 +78,58 @@ class ReadingLayoutTest {
                 repeat(20){bars.first().step(-1)};assertEquals(0,bars.first().index);sheet.dismiss()
             }
         }}finally{input.delete()}
+    }
+    @Test fun chineseDashesDrawAsContinuousTwoEmStrokes() {
+        val chapter = EpubChapterParser.parse("<p>甲——乙丙丁戊己庚辛壬癸</p><p>甲⸺乙</p>")
+        val settings = ReadingSettings(fontSize = 30.0)
+        for (face in listOf(Typeface.DEFAULT, Typeface.SERIF)) {
+            val layout = EpubTypesetter.layout(chapter, 250, 400, 1f, settings, face)
+            val bitmap = Bitmap.createBitmap(250, 400, Bitmap.Config.ARGB_8888)
+            try {
+                ins.runOnMainSync {
+                    val view = NativeEpubView(app)
+                    view.layout(0, 0, bitmap.width, bitmap.height)
+                    view.updateContent(layout, 0, face, emptyList()) { null }
+                    val canvas = Canvas(bitmap)
+                    canvas.drawColor(Color.WHITE)
+                    view.draw(canvas)
+                }
+                for (dash in listOf("——", "⸺")) {
+                    val line = layout.pages.single().lines.single { dash in it.text }
+                    val start = line.text.indexOf(dash)
+                    val end = start + dash.length - 1
+                    assertEquals(dash, chapter.fullText.substring(line.bodyStart + start, line.bodyStart + end + 1))
+                    val left = line.charLeft[start]
+                    val right = line.charRight[end]
+                    assertEquals(line.textSizePx * 2, right - left, 0.01f)
+                    if (dash.length == 2) assertEquals(line.charRight[start], line.charLeft[end], 0.01f)
+                    assertTrue("$dash must fill its width on a single pixel row", (line.top.toInt() until line.baseline.toInt()).any { y ->
+                        (left.toInt() + 1 until right.toInt()).all { x -> Color.red(bitmap.getPixel(x, y)) < 128 }
+                    })
+                }
+            } finally {
+                bitmap.recycle()
+            }
+        }
+    }
+
+    @Test fun chineseDashPairStaysTogetherNearLineBreaks() {
+        val chapter = EpubChapterParser.parse("<p>甲乙丙丁戊——，己庚辛壬癸</p><p>——，，，甲乙丙</p><p>————，甲乙丙</p>")
+        val dashPair = Regex("——")
+        for (width in 200..365 step 5) {
+            val layout = EpubTypesetter.layout(chapter, width, 400, 1f, ReadingSettings(fontSize = 30.0), Typeface.DEFAULT)
+            val lines = layout.pages.flatMap { it.lines }
+            var pairsOnSameLine = 0
+            for (block in chapter.blocks) {
+                val blockLines = lines.filter { it.blockIndex == block.index }
+                for (pair in dashPair.findAll(block.text)) {
+                    val line = blockLines.first { pair.range.first in it.blockStartOffset until it.blockEndOffset }
+                    assertTrue("Dash split at width $width", pair.range.last < line.blockEndOffset)
+                    pairsOnSameLine++
+                }
+            }
+            assertEquals(4, pairsOnSameLine)
+        }
     }
     @Test fun suppliedEpubUsesHorizontalTextAndCorrectPageDirection()=runBlocking {
         val path=InstrumentationRegistry.getArguments().getString("epubPath")
